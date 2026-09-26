@@ -1,5 +1,4 @@
 //! Socks7 / V2rei CLI
-//!
 //! Dual-branded ultra-lightweight proxy protocol (Version 0x07)
 
 use std::net::SocketAddr;
@@ -26,16 +25,16 @@ enum Commands {
         #[arg(short, long, default_value = "0.0.0.0:1080")]
         listen: SocketAddr,
 
-        /// Allow no authentication (default: true)
+        /// Allow no authentication (default: true if no username provided)
         #[arg(long, default_value_t = true)]
         no_auth: bool,
 
         /// Username for authentication (optional)
-        #[arg(long)]
+        #[arg(long, env = "SOCKS7_USERNAME")]
         username: Option<String>,
 
         /// Password for authentication (optional)
-        #[arg(long)]
+        #[arg(long, env = "SOCKS7_PASSWORD")]
         password: Option<String>,
     },
 }
@@ -54,16 +53,21 @@ async fn main() -> anyhow::Result<()> {
     match cli.command {
         Commands::Server {
             listen,
-            no_auth,
+            mut no_auth,
             username,
             password,
         } => {
-            let auth = AuthConfig::new().with_no_auth(no_auth);
+            let auth = AuthConfig::new();
 
-            if let (Some(u), Some(p)) = (username, password) {
-                auth.add_user(u, p).await;
-                tracing::info!("Authentication enabled with provided credentials");
+            if let (Some(u), Some(p)) = (&username, &password) {
+                auth.add_user(u.clone(), p.clone()).await;
+                no_auth = false; // force auth when credentials are given
+                tracing::info!("Authentication enabled → user: {}", u);
+            } else {
+                tracing::info!("Running with NoAuth (open proxy)");
             }
+
+            let auth = auth.with_no_auth(no_auth);
 
             let config = ServerConfig {
                 listen_addr: listen,
