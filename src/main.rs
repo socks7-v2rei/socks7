@@ -7,6 +7,7 @@ use tracing_subscriber::EnvFilter;
 
 use socks7::server::{Server, ServerConfig};
 use socks7::auth::AuthConfig;
+use socks7::bridge::{Bridge, BridgeConfig};
 
 #[derive(Parser)]
 #[command(name = "socks7")]
@@ -25,17 +26,28 @@ enum Commands {
         #[arg(short, long, default_value = "0.0.0.0:1080")]
         listen: SocketAddr,
 
-        /// Allow no authentication (default: true if no username provided)
+        /// Allow no authentication
         #[arg(long, default_value_t = true)]
         no_auth: bool,
 
-        /// Username for authentication (optional)
+        /// Username
         #[arg(long, env = "SOCKS7_USERNAME")]
         username: Option<String>,
 
-        /// Password for authentication (optional)
+        /// Password
         #[arg(long, env = "SOCKS7_PASSWORD")]
         password: Option<String>,
+    },
+
+    /// Run local SOCKS5 Bridge (makes Socks7 usable by normal apps)
+    Bridge {
+        /// Local SOCKS5 listen address
+        #[arg(short, long, default_value = "127.0.0.1:1080")]
+        listen: SocketAddr,
+
+        /// Upstream Socks7 server address
+        #[arg(short, long)]
+        upstream: SocketAddr,
     },
 }
 
@@ -61,7 +73,7 @@ async fn main() -> anyhow::Result<()> {
 
             if let (Some(u), Some(p)) = (&username, &password) {
                 auth.add_user(u.clone(), p.clone()).await;
-                no_auth = false; // force auth when credentials are given
+                no_auth = false;
                 tracing::info!("Authentication enabled → user: {}", u);
             } else {
                 tracing::info!("Running with NoAuth (open proxy)");
@@ -77,6 +89,15 @@ async fn main() -> anyhow::Result<()> {
 
             let server = Server::new(config);
             server.run().await?;
+        }
+
+        Commands::Bridge { listen, upstream } => {
+            let config = BridgeConfig {
+                listen_addr: listen,
+                upstream,
+            };
+            let bridge = Bridge::new(config);
+            bridge.run().await?;
         }
     }
 

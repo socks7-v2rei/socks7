@@ -8,122 +8,89 @@
 
 **Dual branding**: Officially usable as **Socks7** or **V2rei**.
 
-- Protocol Version: `0x07`
-- Website: [v2rei.surf](https://v2rei.surf)
-- Repository: [socks7-v2rei/socks7](https://github.com/socks7-v2rei/socks7)
+---
+
+## How to use (Practical for everyone)
+
+### Option A: Docker (Server side)
+
+```bash
+git clone https://github.com/socks7-v2rei/socks7.git
+cd socks7
+docker build -t socks7-v2rei .
+docker run -d --name socks7 -p 1080:1080 socks7-v2rei
+docker logs socks7          # shows random username & password
+```
+
+### Option B: Local SOCKS5 Bridge (Client side - Recommended)
+
+This makes the proxy work with **any** normal application (Browser, Telegram, curl, etc).
+
+```bash
+# Build
+cargo build --release
+
+# Run bridge (local SOCKS5 → remote Socks7)
+./target/release/socks7 bridge \
+  --listen 127.0.0.1:1080 \
+  --upstream YOUR_SERVER_IP:1080
+```
+
+Now set your system / browser / Telegram SOCKS5 proxy to:
+
+```
+127.0.0.1:1080
+```
+
+Done. Everything works.
+
+---
+
+## Full Commands
+
+### 1. Run pure Socks7 server
+
+```bash
+./target/release/socks7 server --listen 0.0.0.0:1080
+```
+
+With auth:
+```bash
+./target/release/socks7 server --listen 0.0.0.0:1080 \
+  --username myuser --password mypass
+```
+
+### 2. Run SOCKS5 Bridge (for normal apps)
+
+```bash
+./target/release/socks7 bridge \
+  --listen 127.0.0.1:1080 \
+  --upstream 1.2.3.4:1080
+```
 
 ---
 
 ## Features
 
-- Extremely low protocol overhead
-- Native 0-RTT support via Initial Data
 - Full CONNECT + UDP ASSOCIATE
-- Automatic random Username / Password generation (Docker)
-- Optional Username/Password authentication
-- Timeouts, hardening, production-ready
-- Dual naming: **Socks7** = **V2rei**
-
----
-
-## Quick Start with Docker (Recommended)
-
-### 1. Build & Run (auto-generates random credentials)
-
-```bash
-docker build -t socks7-v2rei .
-docker run -d --name socks7 -p 1080:1080 socks7-v2rei
-```
-
-### 2. See the generated username & password
-
-```bash
-docker logs socks7
-```
-
-You will see something like:
-
-```
-============================================================
-  Socks7 / V2rei Proxy is starting...
-============================================================
-
-  Protocol Version : 0x07
-  Listen Address   : 0.0.0.0:1080
-
-  Username         : aB3xK9mP2qR7
-  Password         : zY8nQ4wE1tU6vC9s
-
-  Dual branding    : Socks7  |  V2rei
-  Website          : https://v2rei.surf
-============================================================
-```
-
-### 3. Using docker-compose
-
-```bash
-docker-compose up -d
-docker-compose logs -f
-```
-
-### Custom credentials (optional)
-
-```bash
-docker run -d --name socks7 -p 1080:1080 \
-  -e SOCKS7_USERNAME=myuser \
-  -e SOCKS7_PASSWORD=mypass \
-  socks7-v2rei
-```
-
----
-
-## Build from Source
-
-```bash
-cargo build --release
-./target/release/socks7 server --listen 0.0.0.0:1080
-```
-
-With authentication:
-
-```bash
-./target/release/socks7 server \
-  --listen 0.0.0.0:1080 \
-  --username myuser \
-  --password mypass
-```
-
----
-
-## Protocol Status
-
-| Feature                 | Status     |
-|-------------------------|------------|
-| Protocol definitions    | Complete   |
-| CONNECT                 | Complete   |
-| UDP ASSOCIATE           | Complete   |
-| Authentication          | Complete   |
-| Docker + Auto Creds     | Complete   |
-| Timeouts & Hardening    | Complete   |
-| BIND                    | Basic      |
-| Multiplexing            | Planned    |
+- Automatic random credentials in Docker
+- **SOCKS5 Bridge** → usable by any application
+- Authentication support
+- Dual branding: Socks7 = V2rei
+- Production hardening + timeouts
 
 ---
 
 ## Project Structure
 
 ```
-├── Dockerfile
-├── docker-entrypoint.sh
-├── docker-compose.yml
-├── src/
-│   ├── protocol/     # Core protocol
-│   ├── server/       # Production server
-│   ├── client/       # Client library
-│   ├── auth/         # Authentication
-│   ├── lib.rs
-│   └── main.rs
-└── README.md
+src/
+├── protocol/     # Core Socks7 protocol
+├── server/       # Socks7 server
+├── client/       # Socks7 client
+├── bridge/       # SOCKS5 → Socks7 bridge
+├── auth/
+└── main.rs
 ```
 
 ---
@@ -132,8 +99,5 @@ With authentication:
 
 MIT License
 
----
-
 **Socks7** = **V2rei**  
-Lightweight by design. Powerful by nature.  
-Built for the v2rei network.
+Lightweight by design. Powerful by nature.
