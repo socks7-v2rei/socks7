@@ -26,13 +26,8 @@ echo "  Website          : https://v2rei.surf"
 echo "============================================================"
 echo ""
 
-# Export so the binary can use them
-export SOCKS7_USERNAME
-export SOCKS7_PASSWORD
-
-# Run the server with generated credentials
+# Run the server
 exec socks7 server \
     --listen 0.0.0.0:1080 \
     --username "$SOCKS7_USERNAME" \
-    --password "$SOCKS7_PASSWORD" \
-    "$@"
+    --password "$SOCKS7_PASSWORD"

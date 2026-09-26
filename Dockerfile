@@ -17,12 +17,9 @@ RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/
 WORKDIR /app
 COPY --from=builder /app/target/release/socks7 /usr/local/bin/socks7
 
-# Default port
 EXPOSE 1080
 
-# Entry point script that generates random credentials if not provided
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["server", "--listen", "0.0.0.0:1080"]
