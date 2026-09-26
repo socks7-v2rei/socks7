@@ -1,0 +1,28 @@
+[package]
+name = "socks7"
+version = "0.1.0"
+edition = "2021"
+description = "Socks7 / V2rei: Next-generation ultra-lightweight, high-performance proxy protocol (Version 0x07)"
+authors = ["v2rei", "socks7-v2rei"]
+license = "MIT"
+repository = "https://github.com/socks7-v2rei/socks7"
+homepage = "https://v2rei.surf"
+keywords = ["proxy", "socks", "socks7", "v2rei", "network"]
+categories = ["network-programming"]
+
+[dependencies]
+tokio = { version = "1.36", features = ["full"] }
+bytes = "1.5"
+thiserror = "1.0"
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+clap = { version = "=4.4.18", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+opt-level = 3
+strip = true
