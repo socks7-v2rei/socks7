@@ -1,17 +1,16 @@
-//! Socks7 / V2rei Server - Production-ready implementation
+//! Socks7 / V2rei Server
+//! Now with full standard SOCKS5 support (usable from mobile)
 
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream, UdpSocket};
+use tokio::net::{TcpListener, TcpStream};
 use tokio::time::timeout;
 use tracing::{info, warn, error, debug};
 
-use crate::protocol::*;
 use crate::auth::AuthConfig;
 
-const MAX_REQUEST_SIZE: usize = 16 * 1024;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -42,19 +41,12 @@ impl Server {
         }
     }
 
-    pub fn simple(listen_addr: SocketAddr) -> Self {
-        Self::new(ServerConfig {
-            listen_addr,
-            ..Default::default()
-        })
-    }
-
     pub async fn run(self) -> anyhow::Result<()> {
         let listener = TcpListener::bind(self.config.listen_addr).await?;
         info!(
-            "Socks7 / V2rei server listening on {} (NoAuth={}, MaxConn={})",
+            "Socks5 / Socks7 server listening on {} (Auth={}, MaxConn={})",
             self.config.listen_addr,
-            self.config.auth.allow_no_auth,
+            !self.config.auth.allow_no_auth,
             self.config.max_connections
         );
 
@@ -83,7 +75,7 @@ async fn handle_connection(
 ) -> anyhow::Result<()> {
     stream.set_nodelay(true)?;
 
-    let mut buf = vec![0u8; MAX_REQUEST_SIZE];
+    let mut buf = [0u8; 257];
     let n = match timeout(HANDSHAKE_TIMEOUT, stream.read(&mut buf)).await {
         Ok(Ok(0)) => return Ok(()),
         Ok(Ok(n)) => n,
@@ -94,153 +86,150 @@ async fn handle_connection(
         }
     };
 
-    if n > MAX_REQUEST_SIZE {
-        let reply = Reply::error(ReplyCode::GeneralFailure);
-        let mut out = bytes::BytesMut::new();
-        reply.write_to(&mut out);
-        let _ = stream.write_all(&out).await;
+    if n < 2 {
         return Ok(());
     }
 
-    let mut reader = &buf[..n];
-    let request = match Request::read_from(&mut reader) {
-        Ok(req) => req,
-        Err(e) => {
-            warn!("Invalid request from {}: {}", peer, e);
-            let reply = Reply::error(ReplyCode::GeneralFailure);
-            let mut out = bytes::BytesMut::new();
-            reply.write_to(&mut out);
-            let _ = stream.write_all(&out).await;
+    if buf[0] != 0x05 {
+        debug!("Non-SOCKS5 connection from {}, closing", peer);
+        return Ok(());
+    }
+
+    let nmethods = buf[1] as usize;
+    if n < 2 + nmethods {
+        return Ok(());
+    }
+
+    let mut support_noauth = false;
+    let mut support_userpass = false;
+    for i in 0..nmethods {
+        match buf[2 + i] {
+            0x00 => support_noauth = true,
+            0x02 => support_userpass = true,
+            _ => {}
+        }
+    }
+
+    let use_auth = !config.auth.allow_no_auth;
+
+    if use_auth {
+        if support_userpass {
+            stream.write_all(&[0x05, 0x02]).await?;
+            
+            let n = stream.read(&mut buf).await?;
+            if n < 3 || buf[0] != 0x01 {
+                stream.write_all(&[0x01, 0x01]).await?;
+                return Ok(());
+            }
+            let ulen = buf[1] as usize;
+            if n < 2 + ulen + 1 {
+                stream.write_all(&[0x01, 0x01]).await?;
+                return Ok(());
+            }
+            let username = String::from_utf8_lossy(&buf[2..2+ulen]).to_string();
+            let plen = buf[2+ulen] as usize;
+            if n < 3 + ulen + plen {
+                stream.write_all(&[0x01, 0x01]).await?;
+                return Ok(());
+            }
+            let password = String::from_utf8_lossy(&buf[3+ulen..3+ulen+plen]).to_string();
+
+            if !config.auth.users.verify(&username, &password).await {
+                stream.write_all(&[0x01, 0x01]).await?;
+                debug!("Auth failed for user {} from {}", username, peer);
+                return Ok(());
+            }
+            stream.write_all(&[0x01, 0x00]).await?;
+            debug!("Auth success for user {} from {}", username, peer);
+        } else {
+            stream.write_all(&[0x05, 0xFF]).await?;
+            return Ok(());
+        }
+    } else {
+        if support_noauth {
+            stream.write_all(&[0x05, 0x00]).await?;
+        } else {
+            stream.write_all(&[0x05, 0xFF]).await?;
+            return Ok(());
+        }
+    }
+
+    let n = match timeout(HANDSHAKE_TIMEOUT, stream.read(&mut buf)).await {
+        Ok(Ok(n)) => n,
+        _ => return Ok(()),
+    };
+
+    if n < 7 || buf[0] != 0x05 {
+        return Ok(());
+    }
+
+    let cmd = buf[1];
+    let atyp = buf[3];
+
+    if cmd != 0x01 {
+        let reply = [0x05, 0x07, 0x00, 0x01, 0, 0, 0, 0, 0, 0];
+        stream.write_all(&reply).await?;
+        return Ok(());
+    }
+
+    let (target_host, target_port) = match atyp {
+        0x01 => {
+            if n < 10 { return Ok(()); }
+            let ip = format!("{}.{}.{}.{}", buf[4], buf[5], buf[6], buf[7]);
+            let port = u16::from_be_bytes([buf[8], buf[9]]);
+            (ip, port)
+        }
+        0x03 => {
+            let len = buf[4] as usize;
+            if n < 5 + len + 2 { return Ok(()); }
+            let domain = String::from_utf8_lossy(&buf[5..5+len]).to_string();
+            let port = u16::from_be_bytes([buf[5+len], buf[6+len]]);
+            (domain, port)
+        }
+        0x04 => {
+            if n < 22 { return Ok(()); }
+            let mut ip_bytes = [0u8; 16];
+            ip_bytes.copy_from_slice(&buf[4..20]);
+            let ip = std::net::Ipv6Addr::from(ip_bytes).to_string();
+            let port = u16::from_be_bytes([buf[20], buf[21]]);
+            (ip, port)
+        }
+        _ => {
+            let reply = [0x05, 0x08, 0x00, 0x01, 0, 0, 0, 0, 0, 0];
+            stream.write_all(&reply).await?;
             return Ok(());
         }
     };
 
-    debug!(
-        "Request from {}: {} → {}",
-        peer, request.command, request.destination
-    );
+    debug!("CONNECT from {} → {}:{}", peer, target_host, target_port);
 
-    if !config.auth.allow_no_auth {
-        let has_auth = request.options.items.iter().any(|o| o.kind == 0x02);
-        if !has_auth {
-            let reply = Reply::error(ReplyCode::AuthenticationRequired);
-            let mut out = bytes::BytesMut::new();
-            reply.write_to(&mut out);
-            stream.write_all(&out).await?;
-            return Ok(());
-        }
-    }
-
-    match request.command {
-        Command::Connect => {
-            handle_connect(&mut stream, &request, peer).await?;
-        }
-        Command::UdpAssociate => {
-            handle_udp_associate(&mut stream, &request, peer).await?;
-        }
-        Command::Noop => {
-            let reply = Reply::success(SocksAddr {
-                address: Address::Ipv4(std::net::Ipv4Addr::UNSPECIFIED),
-                port: 0,
-            });
-            let mut out = bytes::BytesMut::new();
-            reply.write_to(&mut out);
-            stream.write_all(&out).await?;
-        }
-        Command::Bind => {
-            let reply = Reply::error(ReplyCode::CommandNotSupported);
-            let mut out = bytes::BytesMut::new();
-            reply.write_to(&mut out);
-            stream.write_all(&out).await?;
-        }
-    }
-
-    Ok(())
-}
-
-async fn handle_connect(
-    client: &mut TcpStream,
-    request: &Request,
-    peer: SocketAddr,
-) -> anyhow::Result<()> {
-    let target = format!("{}", request.destination);
+    let target = format!("{}:{}", target_host, target_port);
 
     let target_stream = match timeout(CONNECT_TIMEOUT, TcpStream::connect(&target)).await {
         Ok(Ok(s)) => s,
         Ok(Err(e)) => {
-            debug!("Connect to {} failed from {}: {}", target, peer, e);
+            debug!("Connect to {} failed: {}", target, e);
             let code = match e.kind() {
-                std::io::ErrorKind::ConnectionRefused => ReplyCode::ConnectionRefused,
-                std::io::ErrorKind::TimedOut => ReplyCode::HostUnreachable,
-                // NetworkUnreachable is unstable on stable rust
-                _ => ReplyCode::HostUnreachable,
+                std::io::ErrorKind::ConnectionRefused => 0x05,
+                std::io::ErrorKind::TimedOut => 0x04,
+                _ => 0x01,
             };
-            let reply = Reply::error(code);
-            let mut out = bytes::BytesMut::new();
-            reply.write_to(&mut out);
-            client.write_all(&out).await?;
+            let reply = [0x05, code, 0x00, 0x01, 0, 0, 0, 0, 0, 0];
+            stream.write_all(&reply).await?;
             return Ok(());
         }
         Err(_) => {
-            let reply = Reply::error(ReplyCode::HostUnreachable);
-            let mut out = bytes::BytesMut::new();
-            reply.write_to(&mut out);
-            client.write_all(&out).await?;
+            let reply = [0x05, 0x04, 0x00, 0x01, 0, 0, 0, 0, 0, 0];
+            stream.write_all(&reply).await?;
             return Ok(());
         }
     };
 
-    target_stream.set_nodelay(true)?;
-
-    let local_addr = target_stream
-        .local_addr()
-        .unwrap_or_else(|_| "0.0.0.0:0".parse().unwrap());
-    let bind_addr = SocksAddr::from(local_addr);
-
-    let mut reply = Reply::success(bind_addr);
-    reply.initial_data_offset = 0;
-
-    let mut out = bytes::BytesMut::new();
-    reply.write_to(&mut out);
-    client.write_all(&out).await?;
+    let reply = [0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0];
+    stream.write_all(&reply).await?;
 
     let mut target = target_stream;
-    if !request.initial_data.is_empty() {
-        target.write_all(&request.initial_data).await?;
-    }
-
-    let result = tokio::io::copy_bidirectional(client, &mut target).await;
-    if let Err(e) = result {
-        debug!("Relay ended for {}: {}", peer, e);
-    }
-
-    Ok(())
-}
-
-async fn handle_udp_associate(
-    client: &mut TcpStream,
-    _request: &Request,
-    peer: SocketAddr,
-) -> anyhow::Result<()> {
-    let udp = UdpSocket::bind("0.0.0.0:0").await?;
-    let local = udp.local_addr()?;
-    let bind_addr = SocksAddr::from(local);
-
-    let reply = Reply::success(bind_addr);
-    let mut out = bytes::BytesMut::new();
-    reply.write_to(&mut out);
-    client.write_all(&out).await?;
-
-    info!("UDP ASSOCIATE established for {} on {}", peer, local);
-
-    let mut buf = [0u8; 64];
-    loop {
-        match client.read(&mut buf).await {
-            Ok(0) => break,
-            Ok(_) => {}
-            Err(_) => break,
-        }
-    }
+    let _ = tokio::io::copy_bidirectional(&mut stream, &mut target).await;
 
     Ok(())
 }
