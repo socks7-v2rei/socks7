@@ -5,9 +5,8 @@ services:
     build: .
     container_name: socks7-v2rei
     ports:
-      - "1080:1080"
+      - "7777:7777"
     environment:
-      # Leave empty to auto-generate random username & password
       - SOCKS7_USERNAME=
       - SOCKS7_PASSWORD=
       - RUST_LOG=info

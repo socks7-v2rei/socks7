@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/
 WORKDIR /app
 COPY --from=builder /app/target/release/socks7 /usr/local/bin/socks7
 
-EXPOSE 1080
+EXPOSE 7777
 
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh

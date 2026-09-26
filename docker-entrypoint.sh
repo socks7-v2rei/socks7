@@ -14,7 +14,7 @@ echo "  Socks7 / V2rei Proxy is starting..."
 echo "============================================================"
 echo ""
 echo "  Protocol         : SOCKS5 (compatible)"
-echo "  Listen Address   : 0.0.0.0:1080"
+echo "  Listen Address   : 0.0.0.0:7777"
 echo ""
 echo "  Username         : $SOCKS7_USERNAME"
 echo "  Password         : $SOCKS7_PASSWORD"
@@ -28,6 +28,6 @@ echo "============================================================"
 echo ""
 
 exec socks7 server \
-    --listen 0.0.0.0:1080 \
+    --listen 0.0.0.0:7777 \
     --username "$SOCKS7_USERNAME" \
     --password "$SOCKS7_PASSWORD"
