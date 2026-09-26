@@ -9,7 +9,7 @@ use tokio::time::timeout;
 use tracing::{info, warn, error, debug};
 
 use crate::protocol::*;
-use crate::auth::{AuthConfig, AuthMethod};
+use crate::auth::AuthConfig;
 
 const MAX_REQUEST_SIZE: usize = 16 * 1024;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
@@ -172,7 +172,7 @@ async fn handle_connect(
             let code = match e.kind() {
                 std::io::ErrorKind::ConnectionRefused => ReplyCode::ConnectionRefused,
                 std::io::ErrorKind::TimedOut => ReplyCode::HostUnreachable,
-                std::io::ErrorKind::NetworkUnreachable => ReplyCode::NetworkUnreachable,
+                // NetworkUnreachable is unstable on stable rust
                 _ => ReplyCode::HostUnreachable,
             };
             let reply = Reply::error(code);
