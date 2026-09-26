@@ -23,7 +23,7 @@ enum Commands {
     /// Run Socks7 / V2rei server
     Server {
         /// Listen address
-        #[arg(short, long, default_value = "0.0.0.0:1080")]
+        #[arg(short, long, default_value = "0.0.0.0:7777")]
         listen: SocketAddr,
 
         /// Allow no authentication
@@ -39,7 +39,7 @@ enum Commands {
         password: Option<String>,
     },
 
-    /// Run local SOCKS5 Bridge (makes Socks7 usable by normal apps)
+    /// Run local SOCKS5 Bridge
     Bridge {
         /// Local SOCKS5 listen address
         #[arg(short, long, default_value = "127.0.0.1:1080")]
