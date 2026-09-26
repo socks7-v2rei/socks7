@@ -5,14 +5,14 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use tracing::{info, warn, debug, error};
+use tracing::{info, debug, error};
 
 use crate::client::Client as Socks7Client;
 use crate::protocol::{Address, SocksAddr};
 
 pub struct BridgeConfig {
     pub listen_addr: SocketAddr,
-    pub upstream: SocketAddr, // Socks7 server address
+    pub upstream: SocketAddr,
 }
 
 pub struct Bridge {
@@ -56,11 +56,10 @@ async fn handle_socks5_client(
 ) -> anyhow::Result<()> {
     stream.set_nodelay(true)?;
 
-    // --- SOCKS5 Greeting ---
     let mut buf = [0u8; 258];
     let n = stream.read(&mut buf).await?;
     if n < 2 || buf[0] != 0x05 {
-        return Ok(()); // not socks5
+        return Ok(());
     }
 
     let nmethods = buf[1] as usize;
@@ -68,7 +67,6 @@ async fn handle_socks5_client(
         return Ok(());
     }
 
-    // We only support NoAuth for the local bridge (simple & practical)
     let mut has_noauth = false;
     for i in 0..nmethods {
         if buf[2 + i] == 0x00 {
@@ -78,13 +76,12 @@ async fn handle_socks5_client(
     }
 
     if has_noauth {
-        stream.write_all(&[0x05, 0x00]).await?; // NoAuth
+        stream.write_all(&[0x05, 0x00]).await?;
     } else {
-        stream.write_all(&[0x05, 0xFF]).await?; // No acceptable method
+        stream.write_all(&[0x05, 0xFF]).await?;
         return Ok(());
     }
 
-    // --- SOCKS5 Request ---
     let n = stream.read(&mut buf).await?;
     if n < 7 || buf[0] != 0x05 {
         return Ok(());
@@ -94,13 +91,11 @@ async fn handle_socks5_client(
     let atyp = buf[3];
 
     if cmd != 0x01 {
-        // Only CONNECT supported in bridge for now
-        let mut reply = vec![0x05, 0x07, 0x00, 0x01, 0, 0, 0, 0, 0, 0];
+        let reply = vec![0x05, 0x07, 0x00, 0x01, 0, 0, 0, 0, 0, 0];
         stream.write_all(&reply).await?;
         return Ok(());
     }
 
-    // Parse target address
     let (target_host, target_port, _addr_len) = match atyp {
         0x01 => {
             if n < 10 {
@@ -130,7 +125,7 @@ async fn handle_socks5_client(
             (ip, port, 16)
         }
         _ => {
-            let mut reply = vec![0x05, 0x08, 0x00, 0x01, 0, 0, 0, 0, 0, 0];
+            let reply = vec![0x05, 0x08, 0x00, 0x01, 0, 0, 0, 0, 0, 0];
             stream.write_all(&reply).await?;
             return Ok(());
         }
@@ -138,7 +133,6 @@ async fn handle_socks5_client(
 
     debug!("SOCKS5 request from {} → {}:{}", peer, target_host, target_port);
 
-    // Connect through real Socks7 upstream
     let socks7_client = Socks7Client::new(config.upstream);
     let target_addr = if let Ok(ip) = target_host.parse::<std::net::IpAddr>() {
         match ip {
@@ -151,16 +145,13 @@ async fn handle_socks5_client(
 
     match socks7_client.connect(target_addr).await {
         Ok(mut upstream) => {
-            // Success reply to SOCKS5 client
-            let mut reply = vec![0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0];
+            let reply = vec![0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0];
             stream.write_all(&reply).await?;
-
-            // Bidirectional copy
             let _ = tokio::io::copy_bidirectional(&mut stream, &mut upstream).await;
         }
         Err(e) => {
             debug!("Upstream Socks7 connect failed: {}", e);
-            let mut reply = vec![0x05, 0x01, 0x00, 0x01, 0, 0, 0, 0, 0, 0];
+            let reply = vec![0x05, 0x01, 0x00, 0x01, 0, 0, 0, 0, 0, 0];
             stream.write_all(&reply).await?;
         }
     }
