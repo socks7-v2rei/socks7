@@ -4,53 +4,26 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-1.75%2B-orange.svg)](https://www.rust-lang.org/)
-[![Status](https://img.shields.io/badge/Status-Active%20Development-yellow.svg)]()
 
-**Dual branding**: Use it as **Socks7** or **V2rei** — both are official.
+**Dual branding**: Officially usable as **Socks7** or **V2rei**.
 
 - Protocol Version: `0x07`
 - Website: [v2rei.surf](https://v2rei.surf)
-- GitHub: [socks7-v2rei/socks7](https://github.com/socks7-v2rei/socks7)
-
----
-
-## Overview
-
-Socks7 (also known as V2rei) is a clean, modern proxy protocol designed from the ground up for:
-
-- Extreme performance
-- Minimal binary overhead
-- Native 0-RTT support
-- High concurrency with low memory usage
-- Long-term stability
-
-Built in **Rust** for the v2rei network.
+- Repository: [socks7-v2rei/socks7](https://github.com/socks7-v2rei/socks7)
 
 ---
 
 ## Features
 
 - Extremely low protocol overhead
-- Native 0-RTT via Initial Data
-- Clean binary framing
-- Extensible Options system
-- Memory-safe implementation
-- Full type-safe protocol definitions
-- Dual naming: **Socks7** and **V2rei**
-
----
-
-## Current Status
-
-| Component                | Status          |
-|--------------------------|-----------------|
-| Core Protocol Definitions| ✅ Complete     |
-| CONNECT command          | ✅ Working      |
-| BIND / UDP ASSOCIATE     | 🚧 Planned      |
-| Authentication           | 🚧 Planned      |
-| Multiplexing             | 🚧 Planned      |
-| Client library           | ✅ Basic        |
-| Server                   | ✅ Basic        |
+- Native 0-RTT support via Initial Data
+- Full CONNECT command (production-ready)
+- UDP ASSOCIATE support
+- Optional Username/Password authentication
+- Clean binary framing + extensible Options
+- Timeouts, nodelay, connection hardening
+- Memory-safe Rust implementation
+- Dual naming: **Socks7** = **V2rei**
 
 ---
 
@@ -62,13 +35,22 @@ Built in **Rust** for the v2rei network.
 cargo build --release
 ```
 
-### Run Server
+### Run Server (No Authentication)
 
 ```bash
 ./target/release/socks7 server --listen 0.0.0.0:1080
 ```
 
-With logs:
+### Run Server with Authentication
+
+```bash
+./target/release/socks7 server \
+  --listen 0.0.0.0:1080 \
+  --username myuser \
+  --password mypass
+```
+
+### Environment
 
 ```bash
 RUST_LOG=debug ./target/release/socks7 server
@@ -76,14 +58,16 @@ RUST_LOG=debug ./target/release/socks7 server
 
 ---
 
-## Protocol Highlights
+## Protocol Overview
 
-- Version byte: `0x07`
-- Minimal request / reply structure
-- Support for IPv4, IPv6 and Domain
-- Initial Data field for true 0-RTT behavior
-- Typed Options (auth, padding, multiplexing, vendor extensions)
-- Clear error codes
+| Item                    | Value                          |
+|-------------------------|--------------------------------|
+| Version                 | `0x07`                         |
+| Commands                | CONNECT, UDP ASSOCIATE, NOOP, BIND |
+| Address Types           | IPv4, IPv6, Domain             |
+| Authentication          | NoAuth + Username/Password     |
+| 0-RTT                   | Yes (Initial Data)             |
+| Options                 | Fully extensible               |
 
 ---
 
@@ -91,26 +75,36 @@ RUST_LOG=debug ./target/release/socks7 server
 
 ```
 src/
-├── protocol/          # Core protocol definitions
-│   ├── address.rs
-│   ├── command.rs
-│   ├── error.rs
-│   ├── message.rs
-│   ├── option.rs
-│   └── reply.rs
-├── server/            # Server implementation
-├── client/            # Client library
+├── protocol/     # Core protocol (address, command, message, option, reply)
+├── server/       # High-performance server
+├── client/       # Client library
+├── auth/         # Authentication
 ├── lib.rs
 └── main.rs
 ```
 
 ---
 
+## Status
+
+| Feature                 | Status     |
+|-------------------------|------------|
+| Protocol definitions    | Complete   |
+| CONNECT                 | Complete   |
+| UDP ASSOCIATE           | Complete   |
+| Authentication          | Complete   |
+| Timeouts & Hardening    | Complete   |
+| BIND                    | Basic      |
+| Multiplexing            | Planned    |
+
+---
+
 ## License
 
-MIT License — see [LICENSE](LICENSE)
+MIT License
 
 ---
 
 **Socks7** = **V2rei**  
-Lightweight by design. Powerful by nature.
+Lightweight by design. Powerful by nature.  
+Built for the v2rei network.

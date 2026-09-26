@@ -1,12 +1,15 @@
-//! Socks7 - v2rei
-//! 
-//! Next-generation ultra-lightweight, stable and powerful proxy protocol.
-//! 
+//! Socks7 / V2rei
+//!
+//! Next-generation ultra-lightweight, high-performance proxy protocol.
+//!
 //! Protocol Version: 0x07
-//! Brand: v2rei (v2rei.surf)
+//! Dual branding: Socks7 and V2rei
+//! Website: https://v2rei.surf
 
 pub mod protocol;
 pub mod server;
 pub mod client;
+pub mod auth;
 
 pub use protocol::*;
+pub use auth::*;
