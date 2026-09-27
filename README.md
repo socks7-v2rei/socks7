@@ -1,24 +1,45 @@
 # Socks7 / V2rei
 
-**Lightweight SOCKS5 Proxy + Desktop Client**
+**Production SOCKS5 Proxy + Desktop Client**
 
 Dual branding: **Socks7** = **V2rei**
 
+Repository: https://github.com/socks7-v2rei/socks7
+
 ---
 
-## Server (already running on your VPS)
+## 1. Server (VPS / Cloud)
+
+### One-click Docker
 
 ```bash
-# Docker
+git clone https://github.com/socks7-v2rei/socks7.git
+cd socks7
+docker build -t socks7-v2rei .
 docker run -d --name socks7 -p 7777:7777 --restart unless-stopped socks7-v2rei
 docker logs socks7
 ```
 
+You will see:
+
+```
+Username : ........
+Password : ........
+Listen   : 0.0.0.0:7777
+```
+
+### docker-compose
+
+```bash
+docker compose up -d --build
+docker compose logs -f
+```
+
 ---
 
-## Desktop Client (Windows / Linux / macOS)
+## 2. Desktop Client (Windows / Linux / macOS)
 
-### 1. Build
+### Build from source
 
 ```bash
 git clone https://github.com/socks7-v2rei/socks7.git
@@ -26,52 +47,97 @@ cd socks7
 cargo build --release
 ```
 
-### 2. Run Client
+### Run client
 
 ```bash
 ./target/release/socks7 client \
-  --upstream 193.233.218.5:7777 \
-  --username YOUR_USERNAME \
-  --password YOUR_PASSWORD
+  --upstream YOUR_SERVER_IP:7777 \
+  --username YOUR_USER \
+  --password YOUR_PASS
 ```
 
-### 3. Set system / browser proxy to:
+Then set system / browser proxy:
 
 ```
 SOCKS5 → 127.0.0.1:1080
 ```
 
-Now all traffic goes through your server.
+### Windows
+
+```powershell
+cargo build --release
+.\target\release\socks7.exe client --upstream IP:7777 --username USER --password PASS
+```
 
 ---
 
-## Mobile
+## 3. Mobile (Android / iOS)
 
-Use any SOCKS5 client app:
+Use any SOCKS5 app:
 
-- **Android**: V2Box, NekoBox, SocksDroid, ...
-- **iOS**: Shadowrocket, Quantumult X, Streisand, ...
+| Platform | Recommended Apps              |
+|----------|-------------------------------|
+| Android  | V2Box, NekoBox, SocksDroid    |
+| iOS      | Shadowrocket, Streisand, Quantumult X |
 
 ```
 Type     : SOCKS5
-Server   : 193.233.218.5
+Server   : YOUR_SERVER_IP
 Port     : 7777
 Username : (from docker logs)
 Password : (from docker logs)
 ```
 
+### Full link format
+
+```
+socks5://USERNAME:PASSWORD@SERVER_IP:7777
+```
+
 ---
 
-## Features
+## 4. Commands
 
-- Full SOCKS5 support
+```bash
+# Server
+socks7 server --listen 0.0.0.0:7777 --username user --password pass
+
+# Desktop Client
+socks7 client --upstream 1.2.3.4:7777 --username user --password pass
+```
+
+---
+
+## 5. Features
+
+- Full SOCKS5 (CONNECT)
 - Username / Password authentication
-- Desktop Client (local → remote)
-- Docker one-click server
-- Dual branding Socks7 / V2rei
+- Auto random credentials in Docker
+- Desktop client (local → remote)
+- Docker + docker-compose
+- Cross-platform (Linux / Windows / macOS)
+- Dual branding: Socks7 / V2rei
+- Port 7777 (dedicated)
+
+---
+
+## 6. Project Structure
+
+```
+src/
+├── server/     # SOCKS5 server
+├── bridge/     # Desktop client (local forwarder)
+├── client/     # Protocol client helpers
+├── auth/       # Authentication
+├── protocol/   # Protocol definitions
+└── main.rs     # CLI
+```
 
 ---
 
 ## License
 
-MIT
+MIT License
+
+**Socks7** = **V2rei**  
+Lightweight. Stable. Ready.
