@@ -1,5 +1,5 @@
 //! Socks7 / V2rei CLI
-//! Dual-branded ultra-lightweight proxy protocol (Version 0x07)
+//! Dual-branded ultra-lightweight proxy protocol
 
 use std::net::SocketAddr;
 use clap::{Parser, Subcommand};
@@ -11,8 +11,8 @@ use socks7::bridge::{Bridge, BridgeConfig};
 
 #[derive(Parser)]
 #[command(name = "socks7")]
-#[command(about = "Socks7 / V2rei: Ultra-lightweight next-gen proxy protocol", long_about = None)]
-#[command(version = "0.1.0")]
+#[command(about = "Socks7 / V2rei - Proxy Server & Desktop Client", long_about = None)]
+#[command(version = "0.2.0")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -20,34 +20,34 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Run Socks7 / V2rei server
+    /// Run the proxy server
     Server {
-        /// Listen address
         #[arg(short, long, default_value = "0.0.0.0:7777")]
         listen: SocketAddr,
 
-        /// Allow no authentication
         #[arg(long, default_value_t = true)]
         no_auth: bool,
 
-        /// Username
         #[arg(long, env = "SOCKS7_USERNAME")]
         username: Option<String>,
 
-        /// Password
         #[arg(long, env = "SOCKS7_PASSWORD")]
         password: Option<String>,
     },
 
-    /// Run local SOCKS5 Bridge
-    Bridge {
-        /// Local SOCKS5 listen address
+    /// Run Desktop Client (local SOCKS5 → remote server)
+    Client {
         #[arg(short, long, default_value = "127.0.0.1:1080")]
         listen: SocketAddr,
 
-        /// Upstream Socks7 server address
         #[arg(short, long)]
         upstream: SocketAddr,
+
+        #[arg(long)]
+        username: String,
+
+        #[arg(long)]
+        password: String,
     },
 }
 
@@ -91,13 +91,20 @@ async fn main() -> anyhow::Result<()> {
             server.run().await?;
         }
 
-        Commands::Bridge { listen, upstream } => {
+        Commands::Client {
+            listen,
+            upstream,
+            username,
+            password,
+        } => {
             let config = BridgeConfig {
                 listen_addr: listen,
                 upstream,
+                username,
+                password,
             };
-            let bridge = Bridge::new(config);
-            bridge.run().await?;
+            let client = Bridge::new(config);
+            client.run().await?;
         }
     }
 
